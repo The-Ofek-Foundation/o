@@ -192,9 +192,46 @@ retry_query() {
     # Read the last user input
     local last_user_input=$(cat "${last_user_file}")
 
+    # call undo query but hide any outputs
+    undo_query 1> /dev/null
+
     # Call query_model with the last user input
     query_model "${last_user_input}"
 }
+
+undo_query() {
+    local chat_index=$(cat "${LOCAL_CHAT_INDEX_FILE}" 2>/dev/null)
+    local chat_dir="${CHAT_DIR}/${chat_index}"
+
+    if [ -z "${chat_index}" ]; then
+        echo "No chat loaded. Cannot undo."
+        return 1
+    fi
+
+    # Determine the last message index
+    local last_message_index=$(ls "${chat_dir}" | sort -n | tail -n 1 | cut -d'-' -f 1)
+    last_message_index=${last_message_index:-0}
+
+    if [ "${last_message_index}" -eq 0 ]; then
+        echo "No messages to undo."
+        return 1
+    fi
+
+    # Remove the last user and assistant files
+    local last_user_file="${chat_dir}/${last_message_index}-0_user.txt"
+    local last_assistant_file="${chat_dir}/${last_message_index}-1_assistant.txt"
+
+    if [ -f "${last_user_file}" ]; then
+        rm "${last_user_file}"
+    fi
+
+    if [ -f "${last_assistant_file}" ]; then
+        rm "${last_assistant_file}"
+    fi
+
+    echo "Last query undone."
+}
+
 
 # Display help text
 display_help() {
@@ -208,7 +245,8 @@ display_help() {
     echo "  --index, -i              Get the current chat index"
     echo "  --context, -c [<index>]  Show chat context for the provided index or current chat if no index is given"
     echo "  --list                   List available models"
-    echo "  --retry                  Retry the last query"
+    echo "  --retry, -r              Retry the last query"
+    echo "  --undo, -u               Undo the last query"
     echo "  --help, -h               Display this help text"
     echo ""
     echo "Input:"
@@ -225,6 +263,7 @@ o() {
     local chat_context_flag=0
     local list_models_flag=0
     local retry_query_flag=0
+    local undo_query_flag=0
     local display_help_flag=0
     local chat_index=""
     local model=""
@@ -282,6 +321,9 @@ o() {
             --retry|-r)
                 retry_query_flag=1
                 ;;
+            --undo|u)
+                undo_query_flag=1
+                ;;
             --help|-h)
                 display_help_flag=1
                 ;;
@@ -335,6 +377,10 @@ o() {
 
     if [[ $retry_query_flag -eq 1 ]]; then
         retry_query
+    fi
+
+    if [[ $undo_query_flag -eq 1 ]]; then
+        undo_query
     fi
 
     if [ -n "$user_input" ]; then
